@@ -17,6 +17,10 @@ type Service struct {
 	Proces map[entityies.ProcessStarted]*exec.Cmd
 }
 
+func NewService(base base.BaseInterface) *Service {
+	return &Service{Base: base, Proces: make(map[entityies.ProcessStarted]*exec.Cmd)}
+}
+
 func (s *Service) GetAvailibleCommandById(id int) ([]byte, entityies.Error) {
 	cmd, err := s.Base.GetAvailibleCommandById(id)
 	if err != nil {

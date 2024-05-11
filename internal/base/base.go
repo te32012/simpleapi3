@@ -26,6 +26,14 @@ type Base struct {
 	Pool *pgxpool.Pool
 }
 
+func NewBase(uri string) (*Base, error) {
+	pool, err := pgxpool.New(context.Background(), uri)
+	if err != nil {
+		return nil, err
+	}
+	return &Base{Pool: pool}, nil
+}
+
 func (b *Base) GetAvailibleCommandById(id int) (entityies.Command, error) {
 	rows, err := b.Pool.Query(context.Background(), q1, id)
 	if err != nil {

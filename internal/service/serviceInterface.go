@@ -8,5 +8,5 @@ type ServiceInterface interface {
 	CreateCommand(data []byte) ([]byte, entityies.Error)
 	StartCommand(id int, data []byte) ([]byte, entityies.Error)
 	GetStatusProcess(data []byte) ([]byte, entityies.Error)
-	StopProcess(data []byte) ([]byte, entityies.Error)
+	StopProcess(data []byte) entityies.Error
 }

@@ -7,24 +7,30 @@ import (
 	"strconv"
 )
 
-type Router struct {
+type MyRouter struct {
 	Service service.ServiceInterface
+	Server  *http.Server
 }
 
-func NewRouter() *Router {
-	r := &Router{}
+func NewMyRouter(host string, port string, service service.ServiceInterface) *MyRouter {
+	r := &MyRouter{}
+	r.Service = service
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ping", r.ping)
 	mux.HandleFunc("GET /get/{id}", r.getAvailibleCommand)
 	mux.HandleFunc("GET /getAll", r.getListAvailibleCommands)
 	mux.HandleFunc("PATCH /create", r.createCommand)
 	mux.HandleFunc("POST /start/{id}", r.startCommand)
-	mux.HandleFunc("GET /status", r.getStatusPID)
-	mux.HandleFunc("DELETE /stop/{id}", r.stopPID)
+	mux.HandleFunc("POST /status", r.getStatusPID)
+	mux.HandleFunc("DELETE /stop", r.stopPID)
+	r.Server = &http.Server{
+		Addr:    host + ":" + port,
+		Handler: mux,
+	}
 	return r
 }
 
-func (r *Router) getAvailibleCommand(response http.ResponseWriter, request *http.Request) {
+func (r *MyRouter) getAvailibleCommand(response http.ResponseWriter, request *http.Request) {
 	id, err := strconv.Atoi(request.PathValue("id"))
 	if len(request.PathValue("id")) == 0 || err != nil {
 		response.WriteHeader(http.StatusBadRequest)
@@ -39,7 +45,7 @@ func (r *Router) getAvailibleCommand(response http.ResponseWriter, request *http
 	response.Write(data)
 }
 
-func (r *Router) getListAvailibleCommands(response http.ResponseWriter, request *http.Request) {
+func (r *MyRouter) getListAvailibleCommands(response http.ResponseWriter, request *http.Request) {
 	data, e := r.Service.GetListAvailibleCommands()
 	if e.E != nil {
 		response.WriteHeader(http.StatusInternalServerError)
@@ -49,7 +55,7 @@ func (r *Router) getListAvailibleCommands(response http.ResponseWriter, request 
 	response.Write(data)
 }
 
-func (r *Router) createCommand(response http.ResponseWriter, request *http.Request) {
+func (r *MyRouter) createCommand(response http.ResponseWriter, request *http.Request) {
 	data, err := io.ReadAll(request.Body)
 	if len(data) == 0 || err != nil {
 		response.WriteHeader(http.StatusBadRequest)
@@ -64,7 +70,7 @@ func (r *Router) createCommand(response http.ResponseWriter, request *http.Reque
 	response.Write(ans)
 }
 
-func (r *Router) startCommand(response http.ResponseWriter, request *http.Request) {
+func (r *MyRouter) startCommand(response http.ResponseWriter, request *http.Request) {
 	id, err := strconv.Atoi(request.PathValue("id"))
 	if len(request.PathValue("id")) == 0 || err != nil {
 		response.WriteHeader(http.StatusBadRequest)
@@ -84,7 +90,7 @@ func (r *Router) startCommand(response http.ResponseWriter, request *http.Reques
 	response.Write(ans)
 }
 
-func (r *Router) getStatusPID(response http.ResponseWriter, request *http.Request) {
+func (r *MyRouter) getStatusPID(response http.ResponseWriter, request *http.Request) {
 	data, err := io.ReadAll(request.Body)
 	if len(data) == 0 || err != nil {
 		response.WriteHeader(http.StatusBadRequest)
@@ -99,21 +105,24 @@ func (r *Router) getStatusPID(response http.ResponseWriter, request *http.Reques
 	response.Write(ans)
 }
 
-func (r *Router) stopPID(response http.ResponseWriter, request *http.Request) {
+func (r *MyRouter) stopPID(response http.ResponseWriter, request *http.Request) {
 	data, err := io.ReadAll(request.Body)
 	if len(data) == 0 || err != nil {
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	ans, e := r.Service.StopProcess(data)
+	e := r.Service.StopProcess(data)
 	if e.E != nil {
 		response.WriteHeader(http.StatusInternalServerError)
 		response.Write(e.Err)
 		return
 	}
-	response.Write(ans)
 }
 
-func (r *Router) ping(response http.ResponseWriter, request *http.Request) {
+func (r *MyRouter) ping(response http.ResponseWriter, request *http.Request) {
 	response.WriteHeader(http.StatusOK)
+}
+
+func (r *MyRouter) ListenAndServe() {
+	r.Server.ListenAndServe()
 }

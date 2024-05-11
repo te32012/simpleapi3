@@ -1,0 +1,367 @@
+openapi: 3.0.3
+info:
+  title: Тестовое задание pgpro 2024
+  description: 
+    В данном тестовом задании реализован функционал
+    
+    - загрузки bash скриптов (команд) в реляционную бд
+      
+    - получения списка всех скриптов
+    
+    - получения деталей про конкретнный скрипт
+      
+    - запуска сохраненных в базу скриптов 
+    
+    - просмотра логов запущенных скриптов
+    
+    - остановки скрипта по его id и pid
+    
+  contact:
+    email: vana0pub2@gmail.com
+  version: 1.0.0
+externalDocs:
+  description: Find out more about Swagger
+  url: http://swagger.io
+tags:
+  - name: logs
+    description: все связанное с получением логов
+  - name: process
+    description: все связанное с запуском/остановкой команд
+  - name: commands 
+    description: все связанное с сохранением/чтением команды из бд
+  - name: server 
+    description: служебное апи
+
+paths:
+  /ping:
+    get:
+      summary: ping сервера
+      description: подтверждает что сервер работает
+      operationId: ping
+      tags:
+        - server
+      responses:
+        '200':
+          description: сервер работает
+        '500':
+          description: сервер не работает
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          
+  /get/{id}:
+    get:
+      summary: получает данные об одной команде
+      description: получает код команды, ее описание и ее id
+      operationId: get
+      tags:
+        - commands
+      parameters:
+        - name: id
+          in: path
+          description: id команды информацию о которой нужно получить
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: данные получены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+
+        '404':
+          description: команда не найдена
+        '500':
+          description: ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /getAll:
+    get:
+      summary: получает данные обо всех командах
+      description: получает описание команды и ее id
+      operationId: getAll
+      tags:
+        - commands
+      responses:
+        '200':
+          description: получен список команд 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Commands'
+
+        '404':
+          description: ни одной команды не найдено
+        '500':
+          description: ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /create:
+    patch:
+      summary: создает команду
+      description: создает команду с указанным кодом и заданным описанием
+      operationId: create
+      tags:
+        - commands
+
+      requestBody:
+        description: Description - описание команды, Script - содержание команды
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandWitoutId'
+
+      responses:
+        '200':
+          description: команда создана c id = 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandCreated'
+        '500':
+          description: ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /start/{id}:
+    post:
+      summary: запуск команды
+      description: запускает команду по id
+      operationId: start
+      tags:
+        - process
+
+      parameters:
+        - name: id
+          in: path
+          description: id команды в базе которую нужно запустить
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: команда запущена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessStarted'
+        '500':
+          description: ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /status:
+    post:
+      summary: запросить статус запущенной команды
+      description: запрашивает текущий статус исполнения команды вместе с логами ее исполнения
+      operationId: status
+      tags:
+        - logs
+      requestBody:
+        description: Id_command - идентификатор команды в базе, Os_pid - идентификатор запущенной команды в ос
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessStarted'
+      responses:
+        '200':
+          description: команда исполняется/завершила исполнение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessStatus'
+        '404':
+          description: данная команда не была запущена
+        '500':
+          description: ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /stop:
+    post:
+      summary: остановить запущенную команду
+      description: останавливает команду по ее pid и id
+      operationId: stop
+      tags:
+        - process
+      requestBody:
+        description: Id_command - идентификатор команды в базе, Os_pid - идентификатор запущенной команды в ос
+        
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessStarted'
+        required: true
+      responses:
+        '200':
+          description: команда исполняется/завершила исполнение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerLog'
+        '404':
+          description: данная команда не была запущена
+        '500':
+          description: ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    CommandCreated:
+      type: object
+      properties:
+        Id:
+          type: integer
+          example: 5
+    Command:
+      type: object
+      properties:
+        Id:
+          type: integer
+          example: 5
+        Description:
+          type: string
+          example: пинг сервера
+        Script:
+          type: string
+          example: ping mysite.com -c 1; echo $?
+    CommandWitoutScript:
+      type: object
+      properties:
+        Id:
+          type: integer
+          example: 5
+        Description:
+          type: string
+          example: пинг сервера
+    CommandWitoutId:
+      type: object
+      properties:
+        Description:
+          type: string
+          example: пинг сервера
+        Script:
+          type: string
+          example: ping mysite.com -c 1; echo $?
+
+    Error:
+      type: object
+      properties:
+        Err:
+          type: string
+          example: "что-то сломалось!!!"
+
+    ProcessStatus:
+      type: object
+      properties:
+        Pid:
+          type: integer
+          example: 5
+        ExitCode:
+          type: integer
+          example: 0
+        Exited:
+          type: boolean
+          example: true
+        Id_logs:
+          type: integer
+          example: 12
+        ParametrsStart:
+          type: array
+          items: 
+            type: string
+          example: ["x", "c"]
+
+    ProcessStarted:
+      type: object
+      properties:
+        Id_command:
+          type: integer
+          example: 2
+        Os_pid:
+          type: integer
+          example: 233
+
+    Commands:
+      type: array
+      items:
+          $ref: '#/components/schemas/CommandWitoutScript'
+
+    LogMessanges:
+      type: object
+      properties:
+        Process:
+          $ref: '#/components/schemas/ProcessStarted'
+        Stream:
+          type: string
+          example: "stderr"
+        Message:
+          type: string
+          example: "12-12-12 programm started"
+
+    AnswerLog:
+      type: object
+      properties:
+        Logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogMessanges'
+        Status:
+          type: string
+          example: exited            type: string
+          example: ["x", "c"]
+
+    ProcessStarted:
+      type: object
+      properties:
+        Id_command:
+          type: integer
+          example: 2
+        Os_pid:
+          type: integer
+          example: 233
+
+    Commands:
+      type: array
+      items:
+          $ref: '#/components/schemas/CommandWitoutScript'
+
+    LogMessanges:
+      type: object
+      properties:
+        Process:
+          $ref: '#/components/schemas/ProcessStarted'
+        Stream:
+          type: string
+          example: "stderr"
+        Message:
+          type: string
+          example: "12-12-12 programm started"
+
+    AnswerLog:
+      type: object
+      properties:
+        Logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogMessanges'
+        Status:
+          type: string
+          example: exited
