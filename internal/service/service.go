@@ -71,10 +71,6 @@ func (s *Service) StartCommand(id int, data []byte) ([]byte, entityies.Error) {
 		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
 	}
 	pst.DataStart = time.Now()
-	log_id, err := s.Base.StartCommand(pst)
-	if err != nil {
-		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
-	}
 	file, err := os.CreateTemp("", "command")
 	info, _ := file.Stat()
 	p := info.Name()
@@ -95,14 +91,15 @@ func (s *Service) StartCommand(id int, data []byte) ([]byte, entityies.Error) {
 	c.Stdout = writer1
 	c.Stderr = writer2
 	c.Stdin = reader1
-	go s.running(reader1, writer1, writer2, log_id, c, ok)
+	log_id := make(chan int)
+	go s.running(reader1, writer1, writer2, pst, c, ok, log_id)
 	err = c.Start()
 	if err != nil {
 		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
 	}
 	var pstd entityies.ProcessStarted
-	pstd.Log_id = log_id
-	pstd.Pid = c.Process.Pid
+	pstd.Id_command = <-log_id
+	pstd.Os_pid = c.Process.Pid
 	ans, err := json.Marshal(&pstd)
 	return ans, entityies.Error{}
 }
@@ -114,7 +111,7 @@ func (s *Service) GetStatusProcess(data []byte) ([]byte, entityies.Error) {
 		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
 	}
 	var answerLog entityies.AnswerLog
-	answerLog.Stdin, answerLog.Stderr, answerLog.Stdout, err = s.Base.GetLogsProcess(pstd)
+	answerLog.Logs, err = s.Base.GetLogsProcess(pstd)
 	if err != nil {
 		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
 	}
@@ -148,18 +145,22 @@ func (s *Service) StopProcess(data []byte) entityies.Error {
 	return entityies.Error{E: errors.New("процесс не найден"), Err: []byte("процесс не найден")}
 }
 
-func (s *Service) running(stdin *bufio.Reader, stdout *bufio.Writer, stderr *bufio.Writer, log_id int, c *exec.Cmd, ok chan bool) {
+func (s *Service) running(stdin *bufio.Reader, stdout *bufio.Writer, stderr *bufio.Writer, pst entityies.ProcessStart, c *exec.Cmd, ok chan bool, lid chan int) {
 	t2 := time.NewTicker(1 * time.Minute)
 	t3 := time.NewTicker(1 * time.Minute)
+	for c.Process == nil {
+		time.Sleep(1 * time.Microsecond)
+	}
+	log_id, _ := s.Base.StartCommand(pst)
+	lid <- log_id
 	for {
 		select {
 		case <-t2.C:
 			r := bufio.NewReader(nil)
 			stdout.ReadFrom(r)
 			var lg entityies.LogMessages
-			lg.Data = time.Now()
 			lg.Stream = "stdout"
-			lg.Process = entityies.ProcessStarted{Log_id: log_id, Pid: c.Process.Pid}
+			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
 			data, _ := io.ReadAll(r)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
@@ -169,9 +170,8 @@ func (s *Service) running(stdin *bufio.Reader, stdout *bufio.Writer, stderr *buf
 			r := bufio.NewReader(nil)
 			stderr.ReadFrom(r)
 			var lg entityies.LogMessages
-			lg.Data = time.Now()
 			lg.Stream = "stderr"
-			lg.Process = entityies.ProcessStarted{Log_id: log_id, Pid: c.Process.Pid}
+			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
 			data, _ := io.ReadAll(r)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
@@ -181,9 +181,8 @@ func (s *Service) running(stdin *bufio.Reader, stdout *bufio.Writer, stderr *buf
 			r := bufio.NewReader(nil)
 			stdout.ReadFrom(r)
 			var lg entityies.LogMessages
-			lg.Data = time.Now()
 			lg.Stream = "stdout"
-			lg.Process = entityies.ProcessStarted{Log_id: log_id, Pid: c.Process.Pid}
+			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
 			data, _ := io.ReadAll(r)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
@@ -192,15 +191,15 @@ func (s *Service) running(stdin *bufio.Reader, stdout *bufio.Writer, stderr *buf
 			r = bufio.NewReader(nil)
 			stderr.ReadFrom(r)
 			lg = entityies.LogMessages{}
-			lg.Data = time.Now()
 			lg.Stream = "stderr"
-			lg.Process = entityies.ProcessStarted{Log_id: log_id, Pid: c.Process.Pid}
+			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
 			data, _ = io.ReadAll(r)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
 				s.Base.AdddLog(lg)
 			}
-			delete(s.Proces, entityies.ProcessStarted{Log_id: log_id, Pid: c.Process.Pid})
+			delete(s.Proces, entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid})
+			close(lid)
 			break
 		}
 	}

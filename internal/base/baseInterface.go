@@ -10,7 +10,7 @@ type BaseInterface interface {
 	GetListAvailibleCommands() (entityies.Commands, error)
 	CreateCommand(command entityies.Command) (int, error)
 	StartCommand(start entityies.ProcessStart) (int, error)
-	GetLogsProcess(start entityies.ProcessStarted) (entityies.Stdin, entityies.Stderr, entityies.Stdout, error)
+	GetLogsProcess(start entityies.ProcessStarted) (entityies.Logs, error)
 	StopProcess(start entityies.ProcessStarted, data time.Time) error
 	AdddLog(msg entityies.LogMessages) error
 }

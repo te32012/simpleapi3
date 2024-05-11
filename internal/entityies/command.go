@@ -3,7 +3,7 @@ package entityies
 type Commands []Command
 
 type Command struct {
-	Id          string
+	Id          int
 	Description string
 	Script      string
 }

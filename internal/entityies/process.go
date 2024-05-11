@@ -12,11 +12,12 @@ type ProcessStatus struct {
 
 type ProcessStart struct {
 	IdCommand      int
+	Os_pid         int
 	ParametrsStart []string
 	DataStart      time.Time
 }
 
 type ProcessStarted struct {
-	Pid    int
-	Log_id int
+	Os_pid     int
+	Id_command int
 }

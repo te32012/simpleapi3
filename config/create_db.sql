@@ -1,7 +1,8 @@
 CREATE TABLE IF NOT EXISTS commands 
 (
     id_command         SERIAL PRIMARY KEY,
-    script   TEXT NOT NULL
+    script   TEXT NOT NULL,
+    description_command TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS log_pids 
 (
