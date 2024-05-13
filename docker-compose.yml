@@ -2,8 +2,8 @@ version: '3.0'
 
 services:
 
-  app:
-    container_name: pgprotest
+  pgpro:
+    container_name: pgpro
     build:
       context: .
     healthcheck:
@@ -13,6 +13,12 @@ services:
       retries: 5
     ports:
       - 2024:2024
+    environment:
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=root
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_BASE=root
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,7 +37,7 @@ services:
       retries: 5
     volumes:
       - ./config/create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
-      - ./config/postgresql.conf:/usr/share/postgresql/postgresql.conf
+      - ./config/postgresql.conf:/usr/share/postgresql/postgresql.conf.sample
       - pgdata:/var/lib/postgresql/data
   pgadm:
     container_name: pgadmin4_container

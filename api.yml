@@ -182,7 +182,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProcessStatus'
+                $ref: '#/components/schemas/AnswerLog'
         '404':
           description: данная команда не была запущена
         '500':

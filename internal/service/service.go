@@ -1,7 +1,7 @@
 package service
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"pgpro2024/internal/base"
 	"pgpro2024/internal/entityies"
+	"strconv"
 	"time"
 )
 
@@ -38,6 +39,9 @@ func (s *Service) GetListAvailibleCommands() ([]byte, entityies.Error) {
 	if err != nil {
 		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
 	}
+	for i := 0; i < len(cmd); i++ {
+		cmd[i].Script = ""
+	}
 	data, err := json.Marshal(&cmd)
 	if err != nil {
 		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
@@ -64,18 +68,18 @@ func (s *Service) CreateCommand(data []byte) ([]byte, entityies.Error) {
 	return ans, entityies.Error{}
 }
 
-func (s *Service) StartCommand(id int, data []byte) ([]byte, entityies.Error) {
-	cmd, err := s.Base.GetAvailibleCommandById(id)
-	if err != nil {
-		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
-	}
+func (s *Service) StartCommand(data []byte) ([]byte, entityies.Error) {
 	var pst entityies.ProcessStart
-	err = json.Unmarshal(data, &pst)
+	err := json.Unmarshal(data, &pst)
 	if err != nil {
 		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
 	}
 	pst.DataStart = time.Now()
-	file, err := os.CreateTemp("", "command")
+	cmd, err := s.Base.GetAvailibleCommandById(pst.IdCommand)
+	if err != nil {
+		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
+	}
+	file, err := os.CreateTemp("/tmp", strconv.Itoa(pst.IdCommand)+"*")
 	info, _ := file.Stat()
 	p := info.Name()
 	if err != nil {
@@ -84,14 +88,13 @@ func (s *Service) StartCommand(id int, data []byte) ([]byte, entityies.Error) {
 	file.WriteString(cmd.Script)
 	file.Close()
 	var ok chan bool
-	c := exec.Command(p, pst.ParametrsStart...)
-	go func() {
-		ok <- c.ProcessState.Exited()
-		close(ok)
-	}()
-	writer1 := bufio.NewWriter(nil)
-	writer2 := bufio.NewWriter(nil)
-	reader1 := bufio.NewReader(nil)
+	var args []string
+	args = append(args, "/tmp/"+p)
+	args = append(args, pst.ParametrsStart...)
+	c := exec.Command("bash", args...)
+	writer1 := bytes.NewBuffer([]byte{})
+	writer2 := bytes.NewBuffer([]byte{})
+	reader1 := bytes.NewBuffer([]byte{})
 	c.Stdout = writer1
 	c.Stderr = writer2
 	c.Stdin = reader1
@@ -101,9 +104,23 @@ func (s *Service) StartCommand(id int, data []byte) ([]byte, entityies.Error) {
 	if err != nil {
 		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
 	}
+	go func() {
+		for c.ProcessState == nil {
+			time.Sleep(1 * time.Second)
+		}
+		for !c.ProcessState.Exited() {
+			time.Sleep(1 * time.Second)
+		}
+		ok <- true
+		close(ok)
+	}()
+	if err != nil {
+		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
+	}
 	var pstd entityies.ProcessStarted
 	pstd.Id_command = <-log_id
 	pstd.Os_pid = c.Process.Pid
+	s.Proces[pstd] = c
 	ans, err := json.Marshal(&pstd)
 	return ans, entityies.Error{}
 }
@@ -140,71 +157,65 @@ func (s *Service) StopProcess(data []byte) entityies.Error {
 	}
 	c, ok := s.Proces[pstd]
 	if ok {
-		err = c.Cancel()
+		err = c.Process.Kill()
 		if err != nil {
 			return entityies.Error{E: err, Err: []byte(err.Error())}
 		}
 		return entityies.Error{}
 	}
-	return entityies.Error{E: errors.New("процесс не найден"), Err: []byte("процесс не найден")}
+	return entityies.Error{E: errors.New("404"), Err: []byte("процесс не найден")}
 }
 
-func (s *Service) running(stdin *bufio.Reader, stdout *bufio.Writer, stderr *bufio.Writer, pst entityies.ProcessStart, c *exec.Cmd, ok chan bool, lid chan int) {
+func (s *Service) running(stdin *bytes.Buffer, stdout *bytes.Buffer, stderr *bytes.Buffer, pst entityies.ProcessStart, c *exec.Cmd, ok chan bool, lid chan int) {
 	t2 := time.NewTicker(1 * time.Minute)
 	t3 := time.NewTicker(1 * time.Minute)
 	for c.Process == nil {
 		time.Sleep(1 * time.Microsecond)
 	}
+	pst.Os_pid = c.Process.Pid
 	log_id, _ := s.Base.StartCommand(pst)
 	lid <- log_id
+	close(lid)
 	for {
 		select {
 		case <-t2.C:
-			r := bufio.NewReader(nil)
-			stdout.ReadFrom(r)
 			var lg entityies.LogMessages
 			lg.Stream = "stdout"
 			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
-			data, _ := io.ReadAll(r)
+			data, _ := io.ReadAll(stdout)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
 				s.Base.AdddLog(lg)
 			}
 		case <-t3.C:
-			r := bufio.NewReader(nil)
-			stderr.ReadFrom(r)
 			var lg entityies.LogMessages
 			lg.Stream = "stderr"
 			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
-			data, _ := io.ReadAll(r)
+			data, _ := io.ReadAll(stderr)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
 				s.Base.AdddLog(lg)
 			}
 		case <-ok:
-			r := bufio.NewReader(nil)
-			stdout.ReadFrom(r)
 			var lg entityies.LogMessages
 			lg.Stream = "stdout"
 			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
-			data, _ := io.ReadAll(r)
+			data, _ := io.ReadAll(stdout)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
 				s.Base.AdddLog(lg)
 			}
-			r = bufio.NewReader(nil)
-			stderr.ReadFrom(r)
 			lg = entityies.LogMessages{}
 			lg.Stream = "stderr"
 			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
-			data, _ = io.ReadAll(r)
+			data, _ = io.ReadAll(stderr)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
 				s.Base.AdddLog(lg)
 			}
 			delete(s.Proces, entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid})
-			close(lid)
-			break
+			s.Base.StopProcess(entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}, time.Now())
+			return
 		}
 	}
 }

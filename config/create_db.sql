@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS log_pids
 );
 CREATE TABLE IF NOT EXISTS data_pids 
 (
-    id_pid references logs_pids(id_pid),
+    id_pid integer unique references log_pids(id_pid) ,
     data_start  timestamp,
     data_finish  timestamp
 );
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS data_pids
 CREATE TABLE IF NOT EXISTS log_command 
 (
     id SERIAL PRIMARY KEY,
-    id_pid references logs_pids(id_pid),
+    id_pid integer references log_pids(id_pid),
     data_logs   TEXT NOT NULL,
     type_log TEXT NOT NULL
 );

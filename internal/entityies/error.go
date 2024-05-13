@@ -2,5 +2,5 @@ package entityies
 
 type Error struct {
 	E   error
-	Err []byte
+	Err []byte `json:"Err"`
 }

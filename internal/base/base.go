@@ -13,10 +13,10 @@ import (
 const (
 	q1 = "select id_command, script, description_command from commands where id_command=$1;"
 	q2 = "select id_command, script, description_command from commands;"
-	q3 = "insert into commands(script, description_command) values ($1, $2) returns id_command;"
-	q4 = "insert into log_pids(id_command, os_pid) values ($1, $2) returns id_pid;"
-	q5 = "insert into data_pids(data_start) values returns id_pid;"
-	q6 = "insert into log_command(id_pid, data_logs, type_log) values ($1, $2, $3) returns id;"
+	q3 = "insert into commands(script, description_command) values ($1, $2) returning id_command;"
+	q4 = "insert into log_pids(id_command, os_pid) values ($1, $2) returning id_pid;"
+	q5 = "insert into data_pids(id_pid, data_start) values ($1, $2);"
+	q6 = "insert into log_command(id_pid, data_logs, type_log) values ($1, $2, $3) returning id;"
 	q7 = "update data_pids set data_finish = $1 where id_pid=$2;"
 	q8 = "select data_logs, type_log from log_command where id_pid = $1;"
 	q9 = "select id_pid from log_pids where id_command = $1 and os_pid = $2;"
@@ -83,7 +83,6 @@ func (b *Base) StartCommand(start entityies.ProcessStart) (int, error) {
 	}
 	defer tx.Commit(context.Background())
 
-	tx.Begin(context.Background())
 	rows, err := tx.Query(context.Background(), q4, start.IdCommand, start.Os_pid)
 	if err != nil {
 		tx.Rollback(context.Background())
@@ -93,20 +92,23 @@ func (b *Base) StartCommand(start entityies.ProcessStart) (int, error) {
 	if rows.Next() {
 		rows.Scan(&id_pid)
 	}
+	rows.Close()
 	var builder strings.Builder
 	for i := 0; i < len(start.ParametrsStart); i++ {
 		builder.WriteString(start.ParametrsStart[i] + " ")
 	}
-	_, err = tx.Query(context.Background(), q6, id_pid, builder.String(), "INIT")
+	rows, err = tx.Query(context.Background(), q6, id_pid, builder.String(), "INIT")
 	if err != nil {
 		tx.Rollback(context.Background())
 		return -1, err
 	}
-	_, err = tx.Query(context.Background(), q5, start.DataStart)
+	rows.Close()
+	rows, err = tx.Query(context.Background(), q5, id_pid, start.DataStart)
 	if err != nil {
 		tx.Rollback(context.Background())
 		return -1, err
 	}
+	rows.Close()
 	return id_pid, nil
 }
 
@@ -129,7 +131,7 @@ func (b *Base) GetLogsProcess(start entityies.ProcessStarted) (entityies.Logs, e
 	for rows.Next() {
 		var lg entityies.LogMessages
 		lg.Process = start
-		rows.Scan(lg.Message, lg.Stream)
+		rows.Scan(&lg.Message, &lg.Stream)
 		ans = append(ans, lg)
 	}
 	return ans, nil
@@ -145,11 +147,17 @@ func (b *Base) StopProcess(start entityies.ProcessStarted, data time.Time) error
 		rows.Scan(&id_pid)
 	}
 	rows.Close()
-	rows, err = b.Pool.Query(context.Background(), q7, id_pid)
+	tx, err := b.Pool.Begin(context.Background())
 	if err != nil {
 		return err
 	}
+	rows, err = tx.Query(context.Background(), q7, data, id_pid)
+	if err != nil {
+		tx.Rollback(context.Background())
+		return err
+	}
 	rows.Close()
+	tx.Commit(context.Background())
 	return nil
 }
 
@@ -163,9 +171,16 @@ func (b *Base) AdddLog(msg entityies.LogMessages) error {
 		rows.Scan(&id_pid)
 	}
 	rows.Close()
-	_, err = b.Pool.Query(context.Background(), q6, id_pid, msg.Message, msg.Stream)
+	tx, err := b.Pool.Begin(context.Background())
 	if err != nil {
 		return err
 	}
+	rows, err = tx.Query(context.Background(), q6, id_pid, msg.Message, msg.Stream)
+	if err != nil {
+		tx.Rollback(context.Background())
+		return err
+	}
+	rows.Close()
+	tx.Commit(context.Background())
 	return nil
 }

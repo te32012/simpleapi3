@@ -20,7 +20,7 @@ func NewMyRouter(host string, port string, service service.ServiceInterface) *My
 	mux.HandleFunc("GET /get/{id}", r.getAvailibleCommand)
 	mux.HandleFunc("GET /getAll", r.getListAvailibleCommands)
 	mux.HandleFunc("PATCH /create", r.createCommand)
-	mux.HandleFunc("POST /start/{id}", r.startCommand)
+	mux.HandleFunc("POST /start", r.startCommand)
 	mux.HandleFunc("POST /status", r.getStatusPID)
 	mux.HandleFunc("DELETE /stop", r.stopPID)
 	r.Server = &http.Server{
@@ -71,17 +71,12 @@ func (r *MyRouter) createCommand(response http.ResponseWriter, request *http.Req
 }
 
 func (r *MyRouter) startCommand(response http.ResponseWriter, request *http.Request) {
-	id, err := strconv.Atoi(request.PathValue("id"))
-	if len(request.PathValue("id")) == 0 || err != nil {
-		response.WriteHeader(http.StatusBadRequest)
-		return
-	}
 	data, err := io.ReadAll(request.Body)
 	if len(data) == 0 || err != nil {
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	ans, e := r.Service.StartCommand(id, data)
+	ans, e := r.Service.StartCommand(data)
 	if e.E != nil {
 		response.WriteHeader(http.StatusInternalServerError)
 		response.Write(e.Err)

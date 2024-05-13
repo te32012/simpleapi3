@@ -2,12 +2,12 @@ package entityies
 
 type Logs []LogMessages
 type LogMessages struct {
-	Process ProcessStarted
-	Stream  string
-	Message string
+	Process ProcessStarted `json:"Process"`
+	Stream  string         `json:"Stream"`
+	Message string         `json:"Message"`
 }
 
 type AnswerLog struct {
-	Logs   Logs
-	Status string
+	Logs   Logs   `json:"Logs"`
+	Status string `json:"Status"`
 }
