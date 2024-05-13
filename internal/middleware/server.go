@@ -38,6 +38,10 @@ func (r *MyRouter) getAvailibleCommand(response http.ResponseWriter, request *ht
 	}
 	data, e := r.Service.GetAvailibleCommandById(id)
 	if e.E != nil {
+		if e.E.Error() == "404" {
+			response.WriteHeader(http.StatusNotFound)
+			return
+		}
 		response.WriteHeader(http.StatusInternalServerError)
 		response.Write(e.Err)
 		return
@@ -48,6 +52,10 @@ func (r *MyRouter) getAvailibleCommand(response http.ResponseWriter, request *ht
 func (r *MyRouter) getListAvailibleCommands(response http.ResponseWriter, request *http.Request) {
 	data, e := r.Service.GetListAvailibleCommands()
 	if e.E != nil {
+		if e.E.Error() == "404" {
+			response.WriteHeader(http.StatusNotFound)
+			return
+		}
 		response.WriteHeader(http.StatusInternalServerError)
 		response.Write(e.Err)
 		return
@@ -78,6 +86,10 @@ func (r *MyRouter) startCommand(response http.ResponseWriter, request *http.Requ
 	}
 	ans, e := r.Service.StartCommand(data)
 	if e.E != nil {
+		if e.E.Error() == "404" {
+			response.WriteHeader(http.StatusNotFound)
+			return
+		}
 		response.WriteHeader(http.StatusInternalServerError)
 		response.Write(e.Err)
 		return
@@ -93,6 +105,10 @@ func (r *MyRouter) getStatusPID(response http.ResponseWriter, request *http.Requ
 	}
 	ans, e := r.Service.GetStatusProcess(data)
 	if e.E != nil {
+		if e.E.Error() == "404" {
+			response.WriteHeader(http.StatusNotFound)
+			return
+		}
 		response.WriteHeader(http.StatusInternalServerError)
 		response.Write(e.Err)
 		return
@@ -108,6 +124,10 @@ func (r *MyRouter) stopPID(response http.ResponseWriter, request *http.Request) 
 	}
 	e := r.Service.StopProcess(data)
 	if e.E != nil {
+		if e.E.Error() == "404" {
+			response.WriteHeader(http.StatusNotFound)
+			return
+		}
 		response.WriteHeader(http.StatusInternalServerError)
 		response.Write(e.Err)
 		return

@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS data_pids
 (
     id_pid integer unique references log_pids(id_pid) ,
     data_start  timestamp,
-    data_finish  timestamp
+    data_finish  timestamp,
+    code_exited integer
 );
 
 CREATE TABLE IF NOT EXISTS log_command 

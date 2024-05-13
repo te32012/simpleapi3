@@ -4,22 +4,24 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"pgpro2024/internal/base"
 	"pgpro2024/internal/entityies"
 	"strconv"
+	"sync"
 	"time"
 )
 
 type Service struct {
 	Base   base.BaseInterface
-	Proces map[entityies.ProcessStarted]*exec.Cmd
+	Proces *sync.Map
 }
 
 func NewService(base base.BaseInterface) *Service {
-	return &Service{Base: base, Proces: make(map[entityies.ProcessStarted]*exec.Cmd)}
+	return &Service{Base: base, Proces: new(sync.Map)}
 }
 
 func (s *Service) GetAvailibleCommandById(id int) ([]byte, entityies.Error) {
@@ -87,7 +89,7 @@ func (s *Service) StartCommand(data []byte) ([]byte, entityies.Error) {
 	}
 	file.WriteString(cmd.Script)
 	file.Close()
-	var ok chan bool
+	ok := make(chan bool)
 	var args []string
 	args = append(args, "/tmp/"+p)
 	args = append(args, pst.ParametrsStart...)
@@ -95,33 +97,33 @@ func (s *Service) StartCommand(data []byte) ([]byte, entityies.Error) {
 	writer1 := bytes.NewBuffer([]byte{})
 	writer2 := bytes.NewBuffer([]byte{})
 	reader1 := bytes.NewBuffer([]byte{})
+	reader1.WriteString(pst.InputStream)
 	c.Stdout = writer1
 	c.Stderr = writer2
 	c.Stdin = reader1
 	log_id := make(chan int)
-	go s.running(reader1, writer1, writer2, pst, c, ok, log_id)
+	go s.running(writer1, writer2, pst, c, ok, log_id)
 	err = c.Start()
 	if err != nil {
 		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
 	}
-	go func() {
-		for c.ProcessState == nil {
-			time.Sleep(1 * time.Second)
-		}
-		for !c.ProcessState.Exited() {
-			time.Sleep(1 * time.Second)
-		}
-		ok <- true
-		close(ok)
-	}()
+	go func(ok1 chan bool) {
+		fmt.Println("cheking")
+		c.Wait()
+		fmt.Println("cheked")
+		ok1 <- true
+		time.Sleep(5 * time.Second)
+		close(ok1)
+	}(ok)
+	var pstd entityies.ProcessStarted
+	pstd.Id_logs = <-log_id
+	pstd.Os_pid = c.Process.Pid
+	s.Proces.LoadOrStore(pstd, c)
+	ans, err := json.Marshal(&pstd)
 	if err != nil {
 		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
+
 	}
-	var pstd entityies.ProcessStarted
-	pstd.Id_command = <-log_id
-	pstd.Os_pid = c.Process.Pid
-	s.Proces[pstd] = c
-	ans, err := json.Marshal(&pstd)
 	return ans, entityies.Error{}
 }
 
@@ -136,11 +138,9 @@ func (s *Service) GetStatusProcess(data []byte) ([]byte, entityies.Error) {
 	if err != nil {
 		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
 	}
-	_, ok := s.Proces[pstd]
-	if ok {
-		answerLog.Status = "running"
-	} else {
-		answerLog.Status = "exited"
+	answerLog.ProcessStatus, err = s.Base.GetStatusProcess(pstd)
+	if err != nil {
+		return nil, entityies.Error{E: err, Err: []byte(err.Error())}
 	}
 	ans, err := json.Marshal(&answerLog)
 	if err != nil {
@@ -155,23 +155,27 @@ func (s *Service) StopProcess(data []byte) entityies.Error {
 	if err != nil {
 		return entityies.Error{E: err, Err: []byte(err.Error())}
 	}
-	c, ok := s.Proces[pstd]
-	if ok {
-		err = c.Process.Kill()
+	c, ok := s.Proces.Load(pstd)
+	if !ok {
+		return entityies.Error{E: errors.New("404"), Err: []byte("процесс не найден")}
+	}
+	if cmd, ok2 := c.(*exec.Cmd); ok2 && ok {
+		err = cmd.Process.Kill()
 		if err != nil {
 			return entityies.Error{E: err, Err: []byte(err.Error())}
 		}
 		return entityies.Error{}
 	}
-	return entityies.Error{E: errors.New("404"), Err: []byte("процесс не найден")}
+	return entityies.Error{E: errors.New("какая-то ошибка"), Err: []byte("какая-то ошибка")}
 }
 
-func (s *Service) running(stdin *bytes.Buffer, stdout *bytes.Buffer, stderr *bytes.Buffer, pst entityies.ProcessStart, c *exec.Cmd, ok chan bool, lid chan int) {
+func (s *Service) running(stdout *bytes.Buffer, stderr *bytes.Buffer, pst entityies.ProcessStart, c *exec.Cmd, ok chan bool, lid chan int) {
 	t2 := time.NewTicker(1 * time.Minute)
 	t3 := time.NewTicker(1 * time.Minute)
 	for c.Process == nil {
 		time.Sleep(1 * time.Microsecond)
 	}
+	fmt.Println(c.Process.Pid)
 	pst.Os_pid = c.Process.Pid
 	log_id, _ := s.Base.StartCommand(pst)
 	lid <- log_id
@@ -181,7 +185,7 @@ func (s *Service) running(stdin *bytes.Buffer, stdout *bytes.Buffer, stderr *byt
 		case <-t2.C:
 			var lg entityies.LogMessages
 			lg.Stream = "stdout"
-			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
+			lg.Process = entityies.ProcessStarted{Id_logs: log_id, Os_pid: c.Process.Pid}
 			data, _ := io.ReadAll(stdout)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
@@ -190,7 +194,7 @@ func (s *Service) running(stdin *bytes.Buffer, stdout *bytes.Buffer, stderr *byt
 		case <-t3.C:
 			var lg entityies.LogMessages
 			lg.Stream = "stderr"
-			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
+			lg.Process = entityies.ProcessStarted{Id_logs: log_id, Os_pid: c.Process.Pid}
 			data, _ := io.ReadAll(stderr)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
@@ -199,7 +203,7 @@ func (s *Service) running(stdin *bytes.Buffer, stdout *bytes.Buffer, stderr *byt
 		case <-ok:
 			var lg entityies.LogMessages
 			lg.Stream = "stdout"
-			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
+			lg.Process = entityies.ProcessStarted{Id_logs: log_id, Os_pid: c.Process.Pid}
 			data, _ := io.ReadAll(stdout)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
@@ -207,14 +211,14 @@ func (s *Service) running(stdin *bytes.Buffer, stdout *bytes.Buffer, stderr *byt
 			}
 			lg = entityies.LogMessages{}
 			lg.Stream = "stderr"
-			lg.Process = entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}
+			lg.Process = entityies.ProcessStarted{Id_logs: log_id, Os_pid: c.Process.Pid}
 			data, _ = io.ReadAll(stderr)
 			if len(data) > 0 {
 				lg.Message = string(data[:])
 				s.Base.AdddLog(lg)
 			}
-			delete(s.Proces, entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid})
-			s.Base.StopProcess(entityies.ProcessStarted{Id_command: log_id, Os_pid: c.Process.Pid}, time.Now())
+			s.Proces.Delete(entityies.ProcessStarted{Id_logs: log_id, Os_pid: c.Process.Pid})
+			s.Base.StopProcess(entityies.ProcessStarted{Id_logs: log_id, Os_pid: c.Process.Pid}, time.Now(), c.ProcessState.ExitCode())
 			return
 		}
 	}

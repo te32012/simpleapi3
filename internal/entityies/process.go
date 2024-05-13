@@ -3,11 +3,12 @@ package entityies
 import "time"
 
 type ProcessStatus struct {
-	Pid            int      `json:"Pid"`
-	ExitCode       int      `json:"ExitCode"`
-	Exited         bool     `json:"Exited"`
-	Id_logs        int      `json:"Id_logs"`
-	ParametrsStart []string `json:"ParametrsStart"`
+	Pid        int        `json:"Pid"`
+	ExitCode   *int       `json:"ExitCode,omitempty"`
+	Id_logs    int        `json:"Id_logs"`
+	IdCommand  int        `json:"IdCommand"`
+	DataStart  time.Time  `json:"DataStart"`
+	DataFinish *time.Time `json:"DataFinish,omitempty"`
 }
 
 type ProcessStart struct {
@@ -19,6 +20,6 @@ type ProcessStart struct {
 }
 
 type ProcessStarted struct {
-	Os_pid     int `json:"Os_pid"`
-	Id_command int `json:"Id_command"`
+	Os_pid  int `json:"Os_pid"`
+	Id_logs int `json:"Id_logs"`
 }

@@ -8,6 +8,6 @@ type LogMessages struct {
 }
 
 type AnswerLog struct {
-	Logs   Logs   `json:"Logs"`
-	Status string `json:"Status"`
+	Logs          Logs          `json:"Logs"`
+	ProcessStatus ProcessStatus `json:"ProcessStatus"`
 }
