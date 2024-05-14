@@ -1,3 +1,7 @@
+[![builded](https://github.com/te32012/simpleapi3/actions/workflows/docker-image.yml/badge.svg)](https://github.com/te32012/simpleapi3/actions/workflows/docker-image.yml)
+
+
+
 Тестовое задание pgpro 2024 
 
 Формат запросов к api описан в файле api.yml при помощи openapi/swagger 
