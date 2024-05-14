@@ -1,0 +1,23 @@
+name: builded 
+
+on:
+  schedule:
+    - cron:  '0 10,23 * * *'
+  push:
+  pull_request:
+
+
+jobs:
+  test_schedule:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build the Docker image
+      run: docker build . 
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build the Docker image
+      run: docker build . 
