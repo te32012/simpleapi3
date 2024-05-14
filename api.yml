@@ -1,20 +1,22 @@
 openapi: 3.0.3
 info:
+openapi: 3.0.3
+info:
   title: Тестовое задание pgpro 2024
   description: 
     В данном тестовом задании реализован функционал
     
-    - загрузки bash скриптов (команд) в реляционную бд
+    - загрузки bash скриптов в реляционную бд
       
     - получения списка всех скриптов
     
     - получения деталей про конкретнный скрипт
       
-    - запуска сохраненных в базу скриптов 
+    - асинхронного запуска сохраненных в базе скриптов 
     
     - просмотра логов запущенных скриптов
     
-    - остановки скрипта по его id и pid
+    - остановки скрипта по его id_logs и pid
     
   contact:
     email: vana0pub2@gmail.com
@@ -134,21 +136,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /start/{id}:
+  /start:
     post:
       summary: запуск команды
       description: запускает команду по id
       operationId: start
       tags:
         - process
+      requestBody:
+        description: Id_command - идентификатор команды в базе, ParametrsStart - параметры командной строки для старта, InputStream - входные данные программы
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessStart'
 
-      parameters:
-        - name: id
-          in: path
-          description: id команды в базе которую нужно запустить
-          required: true
-          schema:
-            type: integer
       responses:
         '200':
           description: команда запущена
@@ -156,6 +157,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProcessStarted'
+        '404':
+          description: команды с таким айди не существует
+
         '500':
           description: ошибка сервера
           content:
@@ -171,7 +175,7 @@ paths:
       tags:
         - logs
       requestBody:
-        description: Id_command - идентификатор команды в базе, Os_pid - идентификатор запущенной команды в ос
+        description: Id_logs - идентификатор логов в базе, Os_pid - идентификатор запущенной команды в ос
         content:
           application/json:
             schema:
@@ -195,12 +199,12 @@ paths:
   /stop:
     post:
       summary: остановить запущенную команду
-      description: останавливает команду по ее pid и id
+      description: останавливает команду по ее pid и id_logs
       operationId: stop
       tags:
         - process
       requestBody:
-        description: Id_command - идентификатор команды в базе, Os_pid - идентификатор запущенной команды в ос
+        description: Id_logs - идентификатор логов в базе, Os_pid - идентификатор запущенной команды в ос
         
         content:
           application/json:
@@ -277,22 +281,35 @@ components:
         ExitCode:
           type: integer
           example: 0
-        Exited:
-          type: boolean
-          example: true
+        DataStart:
+          type: string
+          example: "21-21-2023"
         Id_logs:
           type: integer
           example: 12
+        DataFinish:
+          type: string
+          example: "22-21-2023"
+
+    ProcessStart:
+      type: object
+      properties:
+        IdCommand:
+          type: integer
+          example: 5
         ParametrsStart:
           type: array
           items: 
             type: string
           example: ["x", "c"]
+        InputStream:
+          type: string
+          example: "3 4 5"
 
     ProcessStarted:
       type: object
       properties:
-        Id_command:
+        Id_logs:
           type: integer
           example: 2
         Os_pid:
@@ -324,44 +341,4 @@ components:
           items:
             $ref: '#/components/schemas/LogMessanges'
         Status:
-          type: string
-          example: exited            type: string
-          example: ["x", "c"]
-
-    ProcessStarted:
-      type: object
-      properties:
-        Id_command:
-          type: integer
-          example: 2
-        Os_pid:
-          type: integer
-          example: 233
-
-    Commands:
-      type: array
-      items:
-          $ref: '#/components/schemas/CommandWitoutScript'
-
-    LogMessanges:
-      type: object
-      properties:
-        Process:
-          $ref: '#/components/schemas/ProcessStarted'
-        Stream:
-          type: string
-          example: "stderr"
-        Message:
-          type: string
-          example: "12-12-12 programm started"
-
-    AnswerLog:
-      type: object
-      properties:
-        Logs:
-          type: array
-          items:
-            $ref: '#/components/schemas/LogMessanges'
-        Status:
-          type: string
-          example: exited
+          $ref: '#/components/schemas/ProcessStatus'
